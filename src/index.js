@@ -159,8 +159,8 @@ class App extends React.Component {
                 drawScene()
                 event.preventDefault()
             }
-            document.addEventListener("keydown", this.onKeyDown, false)
         }
+        document.addEventListener("keydown", this.onKeyDown, false)
     }
 
     componentWillUnmount() {
@@ -232,11 +232,15 @@ class App extends React.Component {
                         generateDraw(element)
                         elements.push(element)
                         if(this.state.elementType === 'text'){
-                            this.setState({draggingElement: null})
+                            this.setState({
+                                draggingElement: null,
+                                elementType: 'selection'
+                            })
                             element.isSelected = true
                         } else {
                             this.setState({draggingElement: element})
                         }
+
                         const onMouseMove = e => {
                             const draggingElement = this.state.draggingElement
 
@@ -268,8 +272,10 @@ class App extends React.Component {
                             } else {
                                 draggingElement.isSelected = true
                             }
-                            this.setState({draggingElement: null})
-                            this.setState({elementType: "selection"})
+                            this.setState({
+                                draggingElement: null,
+                                elementType: "selection"
+                            })
                             drawScene()
                         }
 
@@ -296,7 +302,7 @@ context.translate(0.5, 0.5)
 
 const drawScene = () => {
     ReactDOM.render(<App />, rootElement);
-    context.clearRect(0, 0, canvas.width, canvas.height)
+    context.clearRect(-0.5, -0.5, canvas.width, canvas.height)
 
     elements.forEach(element => {
         const elementX1 = getElementAbsoluteX1(element)
