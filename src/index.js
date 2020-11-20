@@ -86,8 +86,7 @@ const generateDraw = (element) => {
             const font = context.font
             context.font = element.font
 
-            const height = element.measure.actualBoundingBoxAscent + element.measure.actualBoundingBoxDescent
-            context.fillText(element.text, element.x, element.y + element.measure.actualBoundingBoxAscent - height / 2)
+            context.fillText(element.text, element.x, element.y + element.measure.actualBoundingBoxAscent)
             context.font = font
         }
     } else {
