@@ -207,6 +207,24 @@ class App extends React.Component {
                         const y = e.clientY - e.target.offsetTop
                         const element = newElement(this.state.elementType, x, y)
 
+                        let isDraggingElements = false
+                        const cursorStyle = document.documentElement.style.cursor
+                        if(this.state.elementType === 'selection'){
+                            isDraggingElements = elements.some(el => {
+                                if(el.isSelected) {
+                                    const minX = Math.min(el.x, el.x + el.width)
+                                    const maxX = Math.max(el.x, el.x + el.width)
+                                    const minY = Math.min(el.y, el.y + el.height)
+                                    const maxY = Math.max(el.y, el.y + el.height)
+                                    return minX <= x && x <= maxX && minY <= y && y <= maxY
+                                }
+                            })
+                            console.log(isDraggingElements)
+                            if(isDraggingElements){
+                                document.documentElement.style.cursor = 'move'
+                            }
+                        }
+
                         if(this.state.elementType === 'text'){
                             const text = prompt('What text do you want?')
                             if(text === null){
@@ -240,7 +258,27 @@ class App extends React.Component {
                             this.setState({draggingElement: element})
                         }
 
+                        let lastX = x
+                        let lastY = y
+
                         const onMouseMove = e => {
+                            if(isDraggingElements) {
+                                const selectedElements = elements.filter(el => el.isSelected)
+                                if(selectedElements.length){
+                                    const x = e.clientX - e.target.offsetLeft
+                                    const y = e.clientY - e.target.offsetTop
+
+                                    selectedElements.forEach(element => {
+                                        element.x += x - lastX
+                                        element.y += y - lastY
+                                    })
+                                    lastX = x
+                                    lastY = y
+                                    drawScene()
+                                    return
+                                }
+                            }
+
                             const draggingElement = this.state.draggingElement
 
                             if(!draggingElement) return
@@ -261,13 +299,20 @@ class App extends React.Component {
                             window.removeEventListener("mousemove", onMouseMove)
                             window.removeEventListener("mouseup", onMouseUp)
 
+                            document.documentElement.style.cursor = cursorStyle
+
                             const draggingElement = this.state.draggingElement
                             if(this.state.draggingElement === null){
                                 return
                             }
                             if(this.state.elementType === 'selection'){
+                                if(isDraggingElements) {
+                                    isDraggingElements = false
+                                } else {
+                                    setSelection(draggingElement)
+                                }
+
                                 elements.pop()
-                                setSelection(draggingElement)
                             } else {
                                 draggingElement.isSelected = true
                             }
