@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import ReactDOM from 'react-dom';
 import './index.css';
 import rough from 'roughjs/bin/rough'
@@ -95,6 +95,25 @@ const setSelection = selection => {
 const App = () => {
     const [draggingElement, setDraggingElement] = useState(null)
     const [elementType, setElementType] = useState('selection')
+
+    const onKeyDown = useCallback(event => {
+        if(event.key === "Backspace"){
+            for (let i = elements.length - 1; i >= 0; --i){
+                if(elements[i].isSelected){
+                    elements.splice(i, 1)
+                }
+            }
+            drawScene()
+        }
+    })
+
+    useEffect(() => {
+        document.addEventListener("keydown", onKeyDown, false)
+
+        return () => {
+            document.removeEventListener("keydown", onKeyDown, false)
+        }
+    }, [onKeyDown])
 
     const ElementOption = ({ type, children }) => {
         return (
