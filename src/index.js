@@ -29,7 +29,7 @@ const rotate = (x1, y1, x2, y2, angle) => {
 
 let generator = rough.generator()
 
-const generateShape = (element) => {
+const generateDraw = (element) => {
     if(element.type === 'selection'){
         element.draw = (rc, context) => {
             const fillStyle = context.fillStyle
@@ -38,16 +38,24 @@ const generateShape = (element) => {
             context.fillStyle = fillStyle
         }
     } else if(element.type === 'rectangle'){
-        const shape = generator.rectangle(element.x, element.y, element.width, element.height)
-        element.draw = (rc, context) => rc.draw(shape)
+        const shape = generator.rectangle(0, 0, element.width, element.height)
+        element.draw = (rc, context) => {
+            context.translate(element.x, element.y)
+            rc.draw(shape)
+            context.translate(-element.x, -element.y)
+        }
     } else if(element.type === 'ellipse'){
-        const shape = generator.ellipse(element.x + element.width / 2, element.y + element.height / 2, element.width, element.height)
-        element.draw = (rc, context) => rc.draw(shape)
+        const shape = generator.ellipse(element.width / 2, element.height / 2, element.width, element.height)
+        element.draw = (rc, context) => {
+            context.translate(element.x, element.y)
+            rc.draw(shape)
+            context.translate(-element.x, -element.y)
+        }
     } else if(element.type === 'arrow'){
-        const x1 = element.x
-        const y1 = element.y
-        const x2 = element.x + element.width
-        const y2 = element.y + element.height
+        const x1 = 0
+        const y1 = 0
+        const x2 = element.width
+        const y2 = element.height
 
         const size = 30 //пиксели
         const distance = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2))
@@ -60,12 +68,17 @@ const generateShape = (element) => {
         const [x4, y4] = rotate(xs, ys, x2, y2, (angle * Math.PI) / 180)
 
         const shapes = [
-            generator.line(x1, y1, x2, y2),
+            //    \
             generator.line(x3, y3, x2, y2),
+            // -----
+            generator.line(x1, y1, x2, y2),
+            //    /
             generator.line(x4, y4, x2, y2)
         ]
         element.draw = (rc, context) => {
+            context.translate(element.x, element.y)
             shapes.forEach(shape => rc.draw(shape))
+            context.translate(-element.x, -element.y)
         }
         return
     } else if(element.type === 'text'){
@@ -82,13 +95,43 @@ const generateShape = (element) => {
     }
 }
 
+const getElementAbsoluteX1 = element => {
+    return element.width >= 0 ? element.x : element.x + element.width
+}
+const getElementAbsoluteX2 = element => {
+    return element.width >= 0 ? element.x + element.width : element.x
+}
+const getElementAbsoluteY1 = element => {
+    return element.height >= 0 ? element.y : element.y + element.height
+}
+const getElementAbsoluteY2 = element => {
+    return element.height >= 0 ? element.y + element.height : element.y
+}
+
 const setSelection = selection => {
+    const selectionX1 = getElementAbsoluteX1(selection)
+    const selectionX2 = getElementAbsoluteX2(selection)
+    const selectionY1 = getElementAbsoluteY1(selection)
+    const selectionY2 = getElementAbsoluteY2(selection)
+
     elements.forEach(element => {
+        const elementX1 = getElementAbsoluteX1(element)
+        const elementX2 = getElementAbsoluteX2(element)
+        const elementY1 = getElementAbsoluteY1(element)
+        const elementY2 = getElementAbsoluteY2(element)
+
         element.isSelected =
-            selection.x < element.x &&
-            selection.y < element.y &&
-            selection.x + selection.width > element.x + element.width &&
-            selection.y + selection.height > element.y + element.height
+            element.type !== 'selection' &&
+            selectionX1 <= elementX1 &&
+            selectionY1 <= elementY1 &&
+            selectionX2 >= elementX2 &&
+            selectionY2 >= elementY2
+    })
+}
+
+const clearSelection = () => {
+    elements.forEach(element => {
+        element.isSelected = false
     })
 }
 
@@ -98,18 +141,30 @@ const App = () => {
 
     const onKeyDown = useCallback(event => {
         if(event.key === "Backspace"){
-            for (let i = elements.length - 1; i >= 0; --i){
+            for(let i = elements.length - 1; i >= 0; --i){
                 if(elements[i].isSelected){
                     elements.splice(i, 1)
                 }
             }
             drawScene()
+            event.preventDefault()
+        } else if(event.key === "ArrowLeft" || event.key === "ArrowRight" || event.key === "ArrowDown" || event.key === "ArrowUp"){
+            const step = event.shiftKey ? 5 : 1
+            elements.forEach(element => {
+                if(element.isSelected){
+                    if(event.key === "ArrowLeft") element.x -= step;
+                    else if(event.key === "ArrowRight") element.x += step;
+                    else if(event.key === "ArrowUp") element.y -= step;
+                    else if(event.key === "ArrowDown") element.y += step;
+                }
+            })
+            drawScene()
+            event.preventDefault()
         }
-    })
+    }, [])
 
     useEffect(() => {
         document.addEventListener("keydown", onKeyDown, false)
-
         return () => {
             document.removeEventListener("keydown", onKeyDown, false)
         }
@@ -118,7 +173,11 @@ const App = () => {
     const ElementOption = ({ type, children }) => {
         return (
             <label>
-                <input type={'radio'} checked={elementType === type} onChange={() => setElementType(type)}/>
+                <input type={'radio'} checked={elementType === type} onChange={() => {
+                    setElementType(type)
+                    clearSelection()
+                    drawScene()
+                }}/>
                 {children}
             </label>
         )
@@ -126,22 +185,29 @@ const App = () => {
 
     return (
         <div>
-            <ElementOption type={'rectangle'}>Rectangle</ElementOption>
-            <ElementOption type={'ellipse'}>Ellipse</ElementOption>
-            <ElementOption type={'arrow'}>Arrow</ElementOption>
-            <ElementOption type={'text'}>Text</ElementOption>
-            <ElementOption type={'selection'}>Selection</ElementOption>
+            {ElementOption({ type: "rectangle", children: "Rectangle"})}
+            {ElementOption({ type: "ellipse", children: "Ellipse"})}
+            {ElementOption({ type: "arrow", children: "Arrow"})}
+            {ElementOption({ type: "text", children: "Text"})}
+            {ElementOption({ type: "selection", children: "Selection"})}
             <canvas
                 id={'canvas'}
                 width={window.innerWidth}
                 height={window.innerHeight}
+                onClick={() => {
+                    console.log('click')
+                }}
                 onMouseDown={e => {
                     const x = e.clientX - e.target.offsetLeft
                     const y = e.clientY - e.target.offsetTop
                     const element = newElement(elementType, x, y)
 
                     if(elementType === 'text'){
-                        element.text = prompt('What text do you want?')
+                        const text = prompt('What text do you want?')
+                        if(text === null){
+                            return
+                        }
+                        element.text = text
                         element.font = '20px Virgil'
                         const font = context.font
                         context.font = element.font
@@ -156,10 +222,11 @@ const App = () => {
                         element.height = height
                     }
 
-                    generateShape(element)
+                    generateDraw(element)
                     elements.push(element)
                     if(elementType === 'text'){
                         setDraggingElement(null)
+                        element.isSelected = true
                     } else {
                         setDraggingElement(element)
                     }
@@ -171,11 +238,17 @@ const App = () => {
                     drawScene()
                 }}
                 onMouseUp={e => {
-                    setDraggingElement(null)
+                    if(draggingElement === null){
+                        return
+                    }
                     if(elementType === 'selection'){
                         elements.pop()
                         setSelection(draggingElement)
+                    } else {
+                        draggingElement.isSelected = true
                     }
+                    setDraggingElement(null)
+                    setElementType('selection')
                     drawScene()
                 }}
                 onMouseMove={e => {
@@ -187,7 +260,7 @@ const App = () => {
                     //shift
                     draggingElement.height = e.shiftKey ? width : height
 
-                    generateShape(draggingElement)
+                    generateDraw(draggingElement)
 
                     if(elementType === 'selection'){
                         setSelection(draggingElement)
@@ -207,19 +280,25 @@ ReactDOM.render(<App />, rootElement);
 const canvas = document.getElementById('canvas')
 const rc = rough.canvas(canvas)
 const context = canvas.getContext('2d')
+context.translate(0.5, 0.5)
 
 const drawScene = () => {
     ReactDOM.render(<App />, rootElement);
     context.clearRect(0, 0, canvas.width, canvas.height)
 
     elements.forEach(element => {
+        const elementX1 = getElementAbsoluteX1(element)
+        const elementX2 = getElementAbsoluteX2(element)
+        const elementY1 = getElementAbsoluteY1(element)
+        const elementY2 = getElementAbsoluteY2(element)
+
         element.draw(rc, context)
 
         if(element.isSelected){
             const margin = 4
             const lineDash = context.getLineDash()
             context.setLineDash([8, 4])
-            context.strokeRect(element.x - margin, element.y - margin, element.width + margin * 2, element.height + margin * 2)
+            context.strokeRect(elementX1 - margin, elementY1 - margin, elementX2 - elementX1 + margin * 2, elementY2 - elementY1 + margin * 2)
             context.setLineDash(lineDash)
         }
     })
