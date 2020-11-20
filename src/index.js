@@ -5,16 +5,68 @@ import rough from 'roughjs/bin/rough'
 
 let elements = []
 
-const newElement = (type, x, y) => {
+const newElement = (type, x, y, width = 0, height = 0) => {
     const element = {
         type: type,
         x: x,
         y: y,
-        width: 0,
-        height: 0,
+        width: width,
+        height: height,
         isSelected: false
     }
     return element
+}
+
+const exportAsPNG = ({ background, visibleOnly, padding = 10 }) => {
+    clearSelection()
+    drawScene()
+
+    let subCanvasX1 = Infinity
+    let subCanvasX2 = 0
+    let subCanvasY1 = Infinity
+    let subCanvasY2 = 0
+
+    elements.forEach(element => {
+        subCanvasX1 = Math.min(subCanvasX1, getElementAbsoluteX1(element))
+        subCanvasX2 = Math.max(subCanvasX2, getElementAbsoluteX2(element))
+        subCanvasY1 = Math.min(subCanvasY1, getElementAbsoluteY1(element))
+        subCanvasY2 = Math.max(subCanvasY2, getElementAbsoluteY2(element))
+    })
+
+    let targetCanvas = canvas
+
+    if(visibleOnly){
+        targetCanvas = document.createElement('canvas')
+        targetCanvas.style.display = 'none'
+        document.body.appendChild(targetCanvas)
+        targetCanvas.width = subCanvasX2 - subCanvasX1 + padding * 2
+        targetCanvas.height = subCanvasY2 - subCanvasY1 + padding * 2
+        const targetCanvas_ctx = targetCanvas.getContext('2d')
+
+        if(background){
+            targetCanvas_ctx.fillStyle = "#FFF"
+            targetCanvas_ctx.fillRect(0, 0, canvas.width, canvas.height)
+        }
+
+        targetCanvas_ctx.drawImage(
+            canvas,
+            subCanvasX1 - padding,
+            subCanvasY1 - padding,
+            subCanvasX2 - subCanvasX1 + padding * 2,
+            subCanvasY2 = subCanvasY1 + padding * 2,
+            0,
+            0,
+            targetCanvas.width,
+            targetCanvas.height
+        )
+    }
+
+    const link = document.createElement('a')
+    link.setAttribute('download', 'amadraw.png')
+    link.setAttribute('href', targetCanvas.toDataURL("image/png"))
+    link.click()
+    link.remove()
+    if(targetCanvas !== canvas) targetCanvas.remove()
 }
 
 const rotate = (x1, y1, x2, y2, angle) => {
@@ -137,7 +189,7 @@ const clearSelection = () => {
 class App extends React.Component {
     componentDidMount() {
         this.onKeyDown = event => {
-            if(event.key === "Backspace"){
+            if(event.key === "Backspace" && event.target.nodeName !== "INPUT"){
                 for(let i = elements.length - 1; i >= 0; --i){
                     if(elements[i].isSelected){
                         elements.splice(i, 1)
@@ -170,7 +222,10 @@ class App extends React.Component {
         super()
         this.state = {
             draggingElement: null,
-            elementType: "selection"
+            elementType: "selection",
+            exportBackground: false,
+            exportVisibleOnly: true,
+            exportPadding: 10
         }
     }
 
@@ -188,152 +243,189 @@ class App extends React.Component {
             )
         }
 
-        return (
-            <div>
-                {ElementOption({ type: "rectangle", children: "Rectangle"})}
-                {ElementOption({ type: "ellipse", children: "Ellipse"})}
-                {ElementOption({ type: "arrow", children: "Arrow"})}
-                {ElementOption({ type: "text", children: "Text"})}
-                {ElementOption({ type: "selection", children: "Selection"})}
-                <canvas
-                    id={'canvas'}
-                    width={window.innerWidth}
-                    height={window.innerHeight}
-                    onClick={() => {
-                        console.log('click')
-                    }}
-                    onMouseDown={e => {
-                        const x = e.clientX - e.target.offsetLeft
-                        const y = e.clientY - e.target.offsetTop
-                        const element = newElement(this.state.elementType, x, y)
+        return <>
+            <div className="exportWrapper">
+                <button onClick={() => {
+                    exportAsPNG({
+                        background: this.state.exportBackground,
+                        visibleOnly: this.state.exportVisibleOnly,
+                        padding: this.state.exportPadding
+                    })
+                }}>Export to png</button>
+                <label>
+                    <input
+                        type="checkbox"
+                        checked={this.state.exportBackground}
+                        onChange={e => {
+                            this.setState({exportBackground: e.target.checked})
+                        }}
+                    />
+                    background
+                </label>
+                <label>
+                    <input
+                        type="checkbox"
+                        checked={this.state.exportVisibleOnly}
+                        onChange={e => {
+                            this.setState({exportVisibleOnly: e.target.checked})
+                        }}
+                    />
+                    visible area only
+                </label>
+                (padding:
+                    <input
+                        type="number"
+                        value={this.state.exportPadding}
+                        onChange={e => {
+                            this.setState({exportPadding: e.target.value})
+                        }}
+                        disabled={!this.state.exportVisibleOnly}
+                    />
+                px)
+            </div>
 
-                        let isDraggingElements = false
-                        const cursorStyle = document.documentElement.style.cursor
-                        if(this.state.elementType === 'selection'){
-                            isDraggingElements = elements.some(el => {
-                                if(el.isSelected) {
-                                    const minX = Math.min(el.x, el.x + el.width)
-                                    const maxX = Math.max(el.x, el.x + el.width)
-                                    const minY = Math.min(el.y, el.y + el.height)
-                                    const maxY = Math.max(el.y, el.y + el.height)
-                                    return minX <= x && x <= maxX && minY <= y && y <= maxY
-                                }
-                            })
-                            console.log(isDraggingElements)
-                            if(isDraggingElements){
-                                document.documentElement.style.cursor = 'move'
+            {ElementOption({ type: "rectangle", children: "Rectangle"})}
+            {ElementOption({ type: "ellipse", children: "Ellipse"})}
+            {ElementOption({ type: "arrow", children: "Arrow"})}
+            {ElementOption({ type: "text", children: "Text"})}
+            {ElementOption({ type: "selection", children: "Selection"})}
+            <canvas
+                id={'canvas'}
+                width={window.innerWidth}
+                height={window.innerHeight}
+                onClick={() => {
+                    console.log('click')
+                }}
+                onMouseDown={e => {
+                    const x = e.clientX - e.target.offsetLeft
+                    const y = e.clientY - e.target.offsetTop
+                    const element = newElement(this.state.elementType, x, y)
+
+                    let isDraggingElements = false
+                    const cursorStyle = document.documentElement.style.cursor
+                    if(this.state.elementType === 'selection'){
+                        isDraggingElements = elements.some(el => {
+                            if(el.isSelected) {
+                                const minX = Math.min(el.x, el.x + el.width)
+                                const maxX = Math.max(el.x, el.x + el.width)
+                                const minY = Math.min(el.y, el.y + el.height)
+                                const maxY = Math.max(el.y, el.y + el.height)
+                                return minX <= x && x <= maxX && minY <= y && y <= maxY
                             }
+                        })
+                        if(isDraggingElements){
+                            document.documentElement.style.cursor = 'move'
                         }
+                    }
 
-                        if(this.state.elementType === 'text'){
-                            const text = prompt('What text do you want?')
-                            if(text === null){
+                    if(this.state.elementType === 'text'){
+                        const text = prompt('What text do you want?')
+                        if(text === null){
+                            return
+                        }
+                        element.text = text
+                        element.font = '20px Virgil'
+                        const font = context.font
+                        context.font = element.font
+                        element.measure = context.measureText(element.text)
+                        context.font = font
+
+                        const height = element.measure.actualBoundingBoxAscent + element.measure.actualBoundingBoxDescent
+
+                        // Center text
+                        element.x -= element.measure.width / 2
+                        element.y -= element.measure.actualBoundingBoxAscent
+                        element.width = element.measure.width
+                        element.height = height
+                    }
+
+                    generateDraw(element)
+                    elements.push(element)
+                    if(this.state.elementType === 'text'){
+                        this.setState({
+                            draggingElement: null,
+                            elementType: 'selection'
+                        })
+                        element.isSelected = true
+                    } else {
+                        this.setState({draggingElement: element})
+                    }
+
+                    let lastX = x
+                    let lastY = y
+
+                    const onMouseMove = e => {
+                        if(isDraggingElements) {
+                            const selectedElements = elements.filter(el => el.isSelected)
+                            if(selectedElements.length){
+                                const x = e.clientX - e.target.offsetLeft
+                                const y = e.clientY - e.target.offsetTop
+
+                                selectedElements.forEach(element => {
+                                    element.x += x - lastX
+                                    element.y += y - lastY
+                                })
+                                lastX = x
+                                lastY = y
+                                drawScene()
                                 return
                             }
-                            element.text = text
-                            element.font = '20px Virgil'
-                            const font = context.font
-                            context.font = element.font
-                            element.measure = context.measureText(element.text)
-                            context.font = font
-
-                            const height = element.measure.actualBoundingBoxAscent + element.measure.actualBoundingBoxDescent
-
-                            // Center text
-                            element.x -= element.measure.width / 2
-                            element.y -= element.measure.actualBoundingBoxAscent
-                            element.width = element.measure.width
-                            element.height = height
                         }
 
-                        generateDraw(element)
-                        elements.push(element)
-                        if(this.state.elementType === 'text'){
-                            this.setState({
-                                draggingElement: null,
-                                elementType: 'selection'
-                            })
-                            element.isSelected = true
-                        } else {
-                            this.setState({draggingElement: element})
+                        const draggingElement = this.state.draggingElement
+
+                        if(!draggingElement) return
+                        let width = e.clientX - e.target.offsetLeft - draggingElement.x
+                        let height = e.clientY - e.target.offsetTop - draggingElement.y
+                        draggingElement.width = width
+                        //shift
+                        draggingElement.height = e.shiftKey ? width : height
+                        generateDraw(draggingElement)
+
+                        if(this.state.elementType === 'selection'){
+                            setSelection(draggingElement)
                         }
+                        drawScene()
+                    }
 
-                        let lastX = x
-                        let lastY = y
+                    const onMouseUp= e => {
+                        window.removeEventListener("mousemove", onMouseMove)
+                        window.removeEventListener("mouseup", onMouseUp)
 
-                        const onMouseMove = e => {
+                        document.documentElement.style.cursor = cursorStyle
+
+                        const draggingElement = this.state.draggingElement
+                        if(this.state.draggingElement === null){
+                            return
+                        }
+                        if(this.state.elementType === 'selection'){
                             if(isDraggingElements) {
-                                const selectedElements = elements.filter(el => el.isSelected)
-                                if(selectedElements.length){
-                                    const x = e.clientX - e.target.offsetLeft
-                                    const y = e.clientY - e.target.offsetTop
-
-                                    selectedElements.forEach(element => {
-                                        element.x += x - lastX
-                                        element.y += y - lastY
-                                    })
-                                    lastX = x
-                                    lastY = y
-                                    drawScene()
-                                    return
-                                }
-                            }
-
-                            const draggingElement = this.state.draggingElement
-
-                            if(!draggingElement) return
-                            let width = e.clientX - e.target.offsetLeft - draggingElement.x
-                            let height = e.clientY - e.target.offsetTop - draggingElement.y
-                            draggingElement.width = width
-                            //shift
-                            draggingElement.height = e.shiftKey ? width : height
-                            generateDraw(draggingElement)
-
-                            if(this.state.elementType === 'selection'){
+                                isDraggingElements = false
+                            } else {
                                 setSelection(draggingElement)
                             }
-                            drawScene()
+
+                            elements.pop()
+                        } else {
+                            draggingElement.isSelected = true
                         }
-
-                        const onMouseUp= e => {
-                            window.removeEventListener("mousemove", onMouseMove)
-                            window.removeEventListener("mouseup", onMouseUp)
-
-                            document.documentElement.style.cursor = cursorStyle
-
-                            const draggingElement = this.state.draggingElement
-                            if(this.state.draggingElement === null){
-                                return
-                            }
-                            if(this.state.elementType === 'selection'){
-                                if(isDraggingElements) {
-                                    isDraggingElements = false
-                                } else {
-                                    setSelection(draggingElement)
-                                }
-
-                                elements.pop()
-                            } else {
-                                draggingElement.isSelected = true
-                            }
-                            this.setState({
-                                draggingElement: null,
-                                elementType: "selection"
-                            })
-                            drawScene()
-                        }
-
-                        window.addEventListener("mousemove", onMouseMove)
-                        window.addEventListener("mouseup", onMouseUp)
-
+                        this.setState({
+                            draggingElement: null,
+                            elementType: "selection"
+                        })
                         drawScene()
-                    }}
+                    }
+
+                    window.addEventListener("mousemove", onMouseMove)
+                    window.addEventListener("mouseup", onMouseUp)
+
+                    drawScene()
+                }}
 
 
-                >
-                </canvas>
-            </div>
-        )
+            >
+            </canvas>
+        </>
     }
 }
 
