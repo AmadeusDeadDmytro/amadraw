@@ -315,10 +315,18 @@ class App extends React.Component {
                     const cursorStyle = document.documentElement.style.cursor
                     if(this.state.elementType === 'selection'){
 
-                        const selectedElement = elements.find(isInsideInElement(x, y))
+                        const selectedElement = elements.find(element => {
+                            const isSelected = isInsideInElement(x, y)(element)
+                            if(isSelected){
+                                element.isSelected = true
+                            }
+                            return isSelected
+                        })
 
                         if(selectedElement){
                             this.setState({draggingElement: selectedElement})
+                        } else {
+                            clearSelection()
                         }
 
                         isDraggingElements = elements.some(element => element.isSelected)
@@ -415,7 +423,6 @@ class App extends React.Component {
                                 isDraggingElements = false
                             }
                             elements.pop()
-                            setSelection(draggingElement)
                         } else {
                             draggingElement.isSelected = true
                         }
@@ -432,8 +439,6 @@ class App extends React.Component {
 
                     drawScene()
                 }}
-
-
             >
             </canvas>
         </>
