@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React from 'react';
 import ReactDOM from 'react-dom';
 import './index.css';
 import rough from 'roughjs/bin/rough'
@@ -28,56 +28,61 @@ const newElement = (type, x, y, width = 0, height = 0) => {
     return element
 }
 
-const exportAsPNG = ({ background, visibleOnly, padding = 10 }) => {
+const exportAsPNG = ({ exportBackground, exportVisibleOnly, exportPadding = 10 }) => {
+
+    if(!elements.length) return alert("Нельзя сохранять пустое полотно")
+
+    // снимаем выделение и делаем ререндер
     clearSelection()
     drawScene()
 
+    // Подсчитываем координаты видимой зоны
     let subCanvasX1 = Infinity
     let subCanvasX2 = 0
     let subCanvasY1 = Infinity
     let subCanvasY2 = 0
 
     elements.forEach(element => {
-        subCanvasX1 = Math.min(subCanvasX1, getElementAbsoluteX1(element))
-        subCanvasX2 = Math.max(subCanvasX2, getElementAbsoluteX2(element))
-        subCanvasY1 = Math.min(subCanvasY1, getElementAbsoluteY1(element))
-        subCanvasY2 = Math.max(subCanvasY2, getElementAbsoluteY2(element))
-    })
+        subCanvasX1 = Math.min(subCanvasX1, getElementAbsoluteX1(element));
+        subCanvasX2 = Math.max(subCanvasX2, getElementAbsoluteX2(element));
+        subCanvasY1 = Math.min(subCanvasY1, getElementAbsoluteY1(element));
+        subCanvasY2 = Math.max(subCanvasY2, getElementAbsoluteY2(element));
+    });
 
-    let targetCanvas = canvas
+    // Создаем временный канвас который и будем экспортировать
+    const tempCanvas = document.createElement('canvas')
+    const tempCanvasCtx = tempCanvas.getContext('2d')
+    tempCanvas.style.display = 'none'
+    document.body.appendChild(tempCanvas)
+    tempCanvas.width = exportVisibleOnly ? subCanvasX2 - subCanvasX1 + exportPadding * 2 : canvas.width
+    tempCanvas.height = exportVisibleOnly ? subCanvasY2 - subCanvasY1 + exportPadding * 2 : canvas.height
 
-    if(visibleOnly){
-        targetCanvas = document.createElement('canvas')
-        targetCanvas.style.display = 'none'
-        document.body.appendChild(targetCanvas)
-        targetCanvas.width = subCanvasX2 - subCanvasX1 + padding * 2
-        targetCanvas.height = subCanvasY2 - subCanvasY1 + padding * 2
-        const targetCanvas_ctx = targetCanvas.getContext('2d')
-
-        if(background){
-            targetCanvas_ctx.fillStyle = "#FFF"
-            targetCanvas_ctx.fillRect(0, 0, canvas.width, canvas.height)
-        }
-
-        targetCanvas_ctx.drawImage(
-            canvas,
-            subCanvasX1 - padding,
-            subCanvasY1 - padding,
-            subCanvasX2 - subCanvasX1 + padding * 2,
-            subCanvasY2 = subCanvasY1 + padding * 2,
-            0,
-            0,
-            targetCanvas.width,
-            targetCanvas.height
-        )
+    if(exportBackground){
+        tempCanvasCtx.fillStyle = "#FFF"
+        tempCanvasCtx.fillRect(0, 0, canvas.width, canvas.height)
     }
+
+    // Копируем оригинальный канвас на временный
+    tempCanvasCtx.drawImage(
+        canvas,
+        exportVisibleOnly ? subCanvasX1 - exportPadding : 0,
+        exportVisibleOnly ? subCanvasY1 - exportPadding : 0,
+        exportVisibleOnly ? subCanvasX2 - subCanvasX1 + exportPadding * 2 : canvas.width,
+        exportVisibleOnly ? subCanvasY2 - subCanvasY1 + exportPadding * 2 : canvas.height,
+        0,
+        0,
+        exportVisibleOnly ? tempCanvas.width : canvas.width,
+        exportVisibleOnly ? tempCanvas.height : canvas.height,
+    )
 
     const link = document.createElement('a')
     link.setAttribute('download', 'amadraw.png')
-    link.setAttribute('href', targetCanvas.toDataURL("image/png"))
+    link.setAttribute('href', tempCanvas.toDataURL("image/png"))
     link.click()
+
+    // Очищаем DOM
     link.remove()
-    if(targetCanvas !== canvas) targetCanvas.remove()
+    if(tempCanvas !== canvas) tempCanvas.remove()
 }
 
 const rotate = (x1, y1, x2, y2, angle) => {
@@ -258,11 +263,11 @@ class App extends React.Component {
             <div className="exportWrapper">
                 <button onClick={() => {
                     exportAsPNG({
-                        background: this.state.exportBackground,
-                        visibleOnly: this.state.exportVisibleOnly,
-                        padding: this.state.exportPadding
+                        exportBackground: this.state.exportBackground,
+                        exportVisibleOnly: this.state.exportVisibleOnly,
+                        exportPadding: this.state.exportPadding
                     })
-                }}>Export to png</button>
+                }}>Сохранить в png</button>
                 <label>
                     <input
                         type="checkbox"
@@ -271,7 +276,7 @@ class App extends React.Component {
                             this.setState({exportBackground: e.target.checked})
                         }}
                     />
-                    background
+                    фон
                 </label>
                 <label>
                     <input
@@ -281,9 +286,9 @@ class App extends React.Component {
                             this.setState({exportVisibleOnly: e.target.checked})
                         }}
                     />
-                    visible area only
+                    только видимая часть
                 </label>
-                (padding:
+                (отступ:
                     <input
                         type="number"
                         value={this.state.exportPadding}
@@ -295,11 +300,11 @@ class App extends React.Component {
                 px)
             </div>
 
-            {ElementOption({ type: "rectangle", children: "Rectangle"})}
-            {ElementOption({ type: "ellipse", children: "Ellipse"})}
-            {ElementOption({ type: "arrow", children: "Arrow"})}
-            {ElementOption({ type: "text", children: "Text"})}
-            {ElementOption({ type: "selection", children: "Selection"})}
+            {ElementOption({ type: "rectangle", children: "Прямоугольник"})}
+            {ElementOption({ type: "ellipse", children: "Эллипс"})}
+            {ElementOption({ type: "arrow", children: "Стрелка"})}
+            {ElementOption({ type: "text", children: "Текст"})}
+            {ElementOption({ type: "selection", children: "Выделение"})}
             <canvas
                 id={'canvas'}
                 width={window.innerWidth}
