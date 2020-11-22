@@ -9,7 +9,7 @@ type AmadrawTextElement = AmadrawElement & {
   type: "text";
   font: string;
   text: string;
-  measure: TextMetrics;
+  actualBoundingBoxAscent: number;
 };
 
 let elements = Array.of<AmadrawElement>();
@@ -205,7 +205,7 @@ const generateDraw = (element: AmadrawElement) => {
       context.fillText(
         element.text,
         element.x,
-        element.y + element.measure.actualBoundingBoxAscent
+        element.y + element.actualBoundingBoxAscent
       );
       context.font = font;
     };
@@ -254,6 +254,14 @@ const clearSelection = () => {
   });
 };
 
+const deleteSelectedElements = () => {
+  for (let i = elements.length - 1; i >= 0; --i) {
+    if (elements[i].isSelected) {
+      elements.splice(i, 1);
+    }
+  }
+};
+
 type AppState = {
   draggingElement: AmadrawElement | null;
   elementType: string;
@@ -276,11 +284,7 @@ class App extends React.Component<{}, AppState> {
       event.key === "Backspace" &&
       (event.target as HTMLElement).nodeName !== "INPUT"
     ) {
-      for (let i = elements.length - 1; i >= 0; --i) {
-        if (elements[i].isSelected) {
-          elements.splice(i, 1);
-        }
-      }
+      deleteSelectedElements();
       drawScene();
       event.preventDefault();
     } else if (
@@ -380,12 +384,52 @@ class App extends React.Component<{}, AppState> {
           />
           px)
         </div>
+        <div
+          onCut={(e) => {
+            e.clipboardData.setData(
+              "text/plain",
+              JSON.stringify(elements.filter((element) => element.isSelected))
+            );
+            deleteSelectedElements();
+            drawScene();
+            e.preventDefault();
+          }}
+          onCopy={(e) => {
+            e.clipboardData.setData(
+              "text/plain",
+              JSON.stringify(elements.filter((element) => element.isSelected))
+            );
+            e.preventDefault();
+          }}
+          onPaste={(e) => {
+            const paste = e.clipboardData.getData("text");
 
-        {this.renderOption({ type: "rectangle", children: "Прямоугольник" })}
-        {this.renderOption({ type: "ellipse", children: "Эллипс" })}
-        {this.renderOption({ type: "arrow", children: "Стрелка" })}
-        {this.renderOption({ type: "text", children: "Текст" })}
-        {this.renderOption({ type: "selection", children: "Выделение" })}
+            let parsedElements;
+            try {
+              parsedElements = JSON.parse(paste);
+            } catch (e) {}
+
+            if (parsedElements.length > 0 && parsedElements[0].type) {
+              clearSelection();
+              parsedElements.forEach((parsedElement: AmadrawElement) => {
+                parsedElement.x += 10;
+                parsedElement.y += 10;
+                generateDraw(parsedElement);
+                elements.push(parsedElement);
+              });
+              drawScene();
+            }
+
+            e.preventDefault();
+          }}
+        >
+          {this.renderOption({ type: "rectangle", children: "Прямоугольник" })}
+          {this.renderOption({ type: "ellipse", children: "Эллипс" })}
+          {this.renderOption({ type: "arrow", children: "Стрелка" })}
+          {this.renderOption({ type: "text", children: "Текст" })}
+          {this.renderOption({ type: "selection", children: "Выделение" })}
+        </div>
+
         <canvas
           id={"canvas"}
           width={window.innerWidth}
@@ -435,21 +479,19 @@ class App extends React.Component<{}, AppState> {
               (element as AmadrawTextElement).font = "20px Virgil";
               const font = context.font;
               context.font = (element as AmadrawTextElement).font;
-              (element as AmadrawTextElement).measure = context.measureText(
-                (element as AmadrawTextElement).text
-              );
+              const {
+                actualBoundingBoxAscent,
+                actualBoundingBoxDescent,
+                width,
+              } = context.measureText((element as AmadrawTextElement).text);
               context.font = font;
 
-              const height =
-                (element as AmadrawTextElement).measure
-                  .actualBoundingBoxAscent +
-                (element as AmadrawTextElement).measure
-                  .actualBoundingBoxDescent;
+              const height = actualBoundingBoxAscent + actualBoundingBoxDescent;
 
               // Center text
-              element.x -= (element as AmadrawTextElement).measure.width / 2;
-              element.y -= (element as AmadrawTextElement).measure.actualBoundingBoxAscent;
-              element.width = (element as AmadrawTextElement).measure.width;
+              element.x -= width / 2;
+              element.y -= actualBoundingBoxAscent;
+              element.width = width;
               element.height = height;
             }
 
@@ -542,7 +584,7 @@ class App extends React.Component<{}, AppState> {
 
             drawScene();
           }}
-        ></canvas>
+        />
       </>
     );
   }
