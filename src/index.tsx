@@ -117,7 +117,7 @@ const getArrowPoints = (element: AmadrawElement) => {
     return [x1, y1, x2, y2, x3, y3, x4, y4]
 }
 
-const exportAsPNG = ({ exportBackground, exportVisibleOnly, exportPadding = 10 }: { exportBackground: boolean; exportVisibleOnly: boolean; exportPadding: number }) => {
+const exportAsPNG = ({ exportBackground, exportVisibleOnly, exportPadding = 10, backgroundColor }: { exportBackground: boolean; exportVisibleOnly: boolean; exportPadding: number; backgroundColor: string }) => {
     if (!elements.length) return alert('Нельзя сохранять пустое полотно')
 
     // снимаем выделение и делаем ререндер
@@ -146,7 +146,7 @@ const exportAsPNG = ({ exportBackground, exportVisibleOnly, exportPadding = 10 }
     tempCanvas.height = exportVisibleOnly ? subCanvasY2 - subCanvasY1 + exportPadding * 2 : canvas.height
 
     if (exportBackground) {
-        tempCanvasCtx.fillStyle = '#FFF'
+        tempCanvasCtx.fillStyle = backgroundColor
         tempCanvasCtx.fillRect(0, 0, canvas.width, canvas.height)
     }
 
@@ -282,7 +282,8 @@ type AppState = {
     elementType: string
     exportBackground: boolean
     exportVisibleOnly: boolean
-    exportPadding: number
+    exportPadding: number,
+    backgroundColor: string
 }
 
 class App extends React.Component<{}, AppState> {
@@ -334,6 +335,7 @@ class App extends React.Component<{}, AppState> {
         exportBackground: false,
         exportVisibleOnly: true,
         exportPadding: 10,
+        backgroundColor: '#FFFFFF'
     }
 
     private renderOption({ type, children }: { type: string; children: React.ReactNode }) {
@@ -363,6 +365,7 @@ class App extends React.Component<{}, AppState> {
                                 exportBackground: this.state.exportBackground,
                                 exportVisibleOnly: this.state.exportVisibleOnly,
                                 exportPadding: this.state.exportPadding,
+                                backgroundColor: this.state.backgroundColor
                             })
                         }}
                     >
@@ -377,6 +380,16 @@ class App extends React.Component<{}, AppState> {
                             }}
                         />
                         фон
+                    </label>
+                    <label>
+                        <input
+                            type="color"
+                            value={this.state.backgroundColor}
+                            onChange={(e) => {
+                                this.setState({ backgroundColor: e.target.value })
+                            }}
+                        />
+                        цвет фона
                     </label>
                     <label>
                         <input
