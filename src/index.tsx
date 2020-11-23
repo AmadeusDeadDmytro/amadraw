@@ -174,9 +174,6 @@ const exportAsPNG = ({ exportBackground, exportVisibleOnly, exportPadding = 10 }
 }
 
 const rotate = (x1: number, y1: number, x2: number, y2: number, angle: number) => {
-    // 𝑎′𝑥=(𝑎𝑥−𝑐𝑥)cos𝜃−(𝑎𝑦−𝑐𝑦)sin𝜃+𝑐𝑥
-    // 𝑎′𝑦=(𝑎𝑥−𝑐𝑥)sin𝜃+(𝑎𝑦−𝑐𝑦)cos𝜃+𝑐𝑦.
-    // https://math.stackexchange.com/questions/2204520/how-do-i-rotate-a-line-segment-in-a-specific-point-on-the-line
     return [(x1 - x2) * Math.cos(angle) - (y1 - y2) * Math.sin(angle) + x2, (x1 - x2) * Math.sin(angle) + (y1 - y2) * Math.cos(angle) + y2]
 }
 
@@ -305,6 +302,7 @@ class App extends React.Component<{}, AppState> {
         if (event.key === 'Escape') {
             clearSelection()
             drawScene()
+            event.preventDefault()
         } else if (event.key === 'Backspace') {
             deleteSelectedElements()
             drawScene()
@@ -318,6 +316,12 @@ class App extends React.Component<{}, AppState> {
                     else if (event.key === 'ArrowUp') element.y -= step
                     else if (event.key === 'ArrowDown') element.y += step
                 }
+            })
+            drawScene()
+            event.preventDefault()
+        } else if (event.key === 'a' && event.ctrlKey) {
+            elements.forEach((element) => {
+                element.isSelected = true
             })
             drawScene()
             event.preventDefault()
@@ -449,17 +453,17 @@ class App extends React.Component<{}, AppState> {
                         let isDraggingElements = false
                         const cursorStyle = document.documentElement.style.cursor
                         if (this.state.elementType === 'selection') {
-                            const hitElement = elements.find(element => {
+                            const hitElement = elements.find((element) => {
                                 return hitTest(element, x, y)
                             })
 
                             // Если мы на что-то кликнули
-                            if(hitElement){
-                                if (hitElement.isSelected){
+                            if (hitElement) {
+                                if (hitElement.isSelected) {
                                     // Если элемент выбран, нам ничего не нужно делать, просто перетащить его
                                 } else {
                                     // Снимаем выделение со всех остальных элементов, если не зажат shift
-                                    if(!e.shiftKey){
+                                    if (!e.shiftKey) {
                                         clearSelection()
                                     }
 
