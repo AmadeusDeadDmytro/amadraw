@@ -449,22 +449,26 @@ class App extends React.Component<{}, AppState> {
                         let isDraggingElements = false
                         const cursorStyle = document.documentElement.style.cursor
                         if (this.state.elementType === 'selection') {
-                            const selectedElement = elements.find((element) => {
-                                const isSelected = hitTest(element, x, y)
-                                if (isSelected) {
-                                    element.isSelected = true
+                            const hitElement = elements.find(element => {
+                                return hitTest(element, x, y)
+                            })
+
+                            // Если мы на что-то кликнули
+                            if(hitElement){
+                                if (hitElement.isSelected){
+                                    // Если элемент выбран, нам ничего не нужно делать, просто перетащить его
+                                } else {
+                                    // Снимаем выделение со всех остальных элементов, если не зажат shift
+                                    if(!e.shiftKey){
+                                        clearSelection()
+                                    }
+
+                                    // Неважно что, просто выбираем это
+                                    hitElement.isSelected = true
                                 }
-                                return isSelected
-                            })
-
-                            // Снять выделение со всех элементов, кроме того на который мы кликнули
-                            elements.forEach((element) => {
-                                if (element === selectedElement) return
-                                element.isSelected = false
-                            })
-
-                            if (selectedElement) {
-                                this.setState({ draggingElement: selectedElement })
+                            } else {
+                                // Если кликнули на пустое пространство просто убираем выделение
+                                clearSelection()
                             }
 
                             isDraggingElements = elements.some((element) => element.isSelected)
