@@ -267,7 +267,10 @@ const generateDraw = (element: AmadrawElement) => {
         element.draw = (rc, context) => {
             const font = context.font
             context.font = element.font
+            const fillStyle = context.fillStyle
+            context.fillStyle = element.strokeColor
             context.fillText(element.text, element.x, element.y + element.actualBoundingBoxAscent)
+            context.fillStyle = fillStyle
             context.font = font
         }
     } else {
