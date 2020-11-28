@@ -15,6 +15,19 @@ type AmadrawTextElement = AmadrawElement & {
 
 let elements = Array.of<AmadrawElement>()
 
+// https://stackoverflow.com/questions/521295/seeding-the-random-number-generator-in-javascript/47593316#47593316
+const LCG = (seed: number) => () => ((2 ** 31 - 1) & (seed = Math.imul(48271, seed))) / 2 ** 31
+
+// К сожаление, roughjs не поддерживает атрибут зерна
+// Пришлось сделать свой аналог, переписав Math.random
+const withCustomMathRandom = <T, >(seed: number, cb: () => T ) => {
+    const random = Math.random;
+    Math.random = LCG(seed);
+    const result = cb();
+    Math.random = random;   
+    return result;
+}
+
 // Функция вычисления расстояния от точки на канвасе к элементу
 const distanceBetweenPointAndSegment = (x: number, y: number, x1: number, y1: number, x2: number, y2: number) => {
     const A = x - x1
@@ -95,6 +108,7 @@ const newElement = (type: string, x: number, y: number, strokeColor: string, bac
         height: height,
         strokeColor: strokeColor,
         backgroundColor: backgroundColor,
+        seed: Math.floor(Math.random() * 2 ** 31),
         isSelected: false,
         draw(rc: RoughCanvas, context: CanvasRenderingContext2D) {},
     }
@@ -233,14 +247,18 @@ const generateDraw = (element: AmadrawElement) => {
             context.fillStyle = fillStyle
         }
     } else if (element.type === 'rectangle') {
-        const shape = generator.rectangle(0, 0, element.width, element.height, { stroke: element.strokeColor, fill: element.backgroundColor })
+        const shape = withCustomMathRandom(element.seed, () => {
+            return generator.rectangle(0, 0, element.width, element.height, { stroke: element.strokeColor, fill: element.backgroundColor })
+        })
         element.draw = (rc, context) => {
             context.translate(element.x, element.y)
             rc.draw(shape)
             context.translate(-element.x, -element.y)
         }
     } else if (element.type === 'ellipse') {
-        const shape = generator.ellipse(element.width / 2, element.height / 2, element.width, element.height, { stroke: element.strokeColor, fill: element.backgroundColor })
+        const shape = withCustomMathRandom(element.seed, () => {
+            return generator.ellipse(element.width / 2, element.height / 2, element.width, element.height, { stroke: element.strokeColor, fill: element.backgroundColor })
+        })
         element.draw = (rc, context) => {
             context.translate(element.x, element.y)
             rc.draw(shape)
@@ -249,14 +267,16 @@ const generateDraw = (element: AmadrawElement) => {
     } else if (element.type === 'arrow') {
         const [x1, y1, x2, y2, x3, y3, x4, y4] = getArrowPoints(element)
 
-        const shapes = [
-            //    \
-            generator.line(x3, y3, x2, y2, { stroke: element.strokeColor }),
-            // -----
-            generator.line(x1, y1, x2, y2, { stroke: element.strokeColor }),
-            //    /
-            generator.line(x4, y4, x2, y2, { stroke: element.strokeColor }),
-        ]
+        const shapes = withCustomMathRandom(element.seed, () => {
+            return [
+                //    \
+                generator.line(x3, y3, x2, y2, { stroke: element.strokeColor }),
+                // -----
+                generator.line(x1, y1, x2, y2, { stroke: element.strokeColor }),
+                //    /
+                generator.line(x4, y4, x2, y2, { stroke: element.strokeColor }),
+            ]
+        })
         element.draw = (rc, context) => {
             context.translate(element.x, element.y)
             shapes.forEach((shape) => rc.draw(shape))
