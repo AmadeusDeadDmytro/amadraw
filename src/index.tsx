@@ -86,13 +86,15 @@ const hitTest = (element: AmadrawElement, x: number, y: number) => {
     }
 }
 
-const newElement = (type: string, x: number, y: number, width = 0, height = 0) => {
+const newElement = (type: string, x: number, y: number, strokeColor: string, backgroundColor: string, width = 0, height = 0) => {
     const element = {
         type: type,
         x: x,
         y: y,
         width: width,
         height: height,
+        strokeColor: strokeColor,
+        backgroundColor: backgroundColor,
         isSelected: false,
         draw(rc: RoughCanvas, context: CanvasRenderingContext2D) {},
     }
@@ -118,11 +120,11 @@ const getArrowPoints = (element: AmadrawElement) => {
     return [x1, y1, x2, y2, x3, y3, x4, y4]
 }
 
-const renderScene = (rc: RoughCanvas, context: CanvasRenderingContext2D, viewBgColor: string | null) => {
+const renderScene = (rc: RoughCanvas, context: CanvasRenderingContext2D, viewBackgroundColor: string | null) => {
     const fillStyle = context.fillStyle
 
-    if(typeof viewBgColor === 'string'){
-        context.fillStyle = viewBgColor
+    if(typeof viewBackgroundColor === 'string'){
+        context.fillStyle = viewBackgroundColor
         context.fillRect(-0.5, -0.5, canvas.width, canvas.height)
     } else {
         context.clearRect(-0.5, -0.5, canvas.width, canvas.height)
@@ -150,12 +152,12 @@ const exportAsPNG = ({
     exportBackground,
     exportVisibleOnly,
     exportPadding = 10,
-    viewBgColor,
+    viewBackgroundColor,
 }: {
     exportBackground: boolean
     exportVisibleOnly: boolean
     exportPadding: number
-    viewBgColor: string
+    viewBackgroundColor: string
 }) => {
     if (!elements.length) return alert('Нельзя сохранять пустое полотно')
 
@@ -185,7 +187,7 @@ const exportAsPNG = ({
         tempCanvas.height = exportVisibleOnly ? subCanvasY2 - subCanvasY1 + exportPadding * 2 : canvas.height
 
         if (!exportBackground) {
-            renderScene(rc, context, null)
+            renderScene(rc, context, viewBackgroundColor)
         }
 
         // Копируем оригинальный канвас на временный
@@ -222,7 +224,7 @@ const isTextElement = (element: AmadrawElement): element is AmadrawTextElement =
 
 let generator = rough.generator(null as any)
 
-const generateDraw = (element: AmadrawElement, itemStrokeColor: string, itemBackgroundColor: string) => {
+const generateDraw = (element: AmadrawElement) => {
     if (element.type === 'selection') {
         element.draw = (rc, context) => {
             const fillStyle = context.fillStyle
@@ -231,14 +233,14 @@ const generateDraw = (element: AmadrawElement, itemStrokeColor: string, itemBack
             context.fillStyle = fillStyle
         }
     } else if (element.type === 'rectangle') {
-        const shape = generator.rectangle(0, 0, element.width, element.height, { stroke: itemStrokeColor, fill: itemBackgroundColor })
+        const shape = generator.rectangle(0, 0, element.width, element.height, { stroke: element.strokeColor, fill: element.backgroundColor })
         element.draw = (rc, context) => {
             context.translate(element.x, element.y)
             rc.draw(shape)
             context.translate(-element.x, -element.y)
         }
     } else if (element.type === 'ellipse') {
-        const shape = generator.ellipse(element.width / 2, element.height / 2, element.width, element.height, { stroke: itemStrokeColor, fill: itemBackgroundColor })
+        const shape = generator.ellipse(element.width / 2, element.height / 2, element.width, element.height, { stroke: element.strokeColor, fill: element.backgroundColor })
         element.draw = (rc, context) => {
             context.translate(element.x, element.y)
             rc.draw(shape)
@@ -249,11 +251,11 @@ const generateDraw = (element: AmadrawElement, itemStrokeColor: string, itemBack
 
         const shapes = [
             //    \
-            generator.line(x3, y3, x2, y2),
+            generator.line(x3, y3, x2, y2, { stroke: element.strokeColor }),
             // -----
-            generator.line(x1, y1, x2, y2),
+            generator.line(x1, y1, x2, y2, { stroke: element.strokeColor }),
             //    /
-            generator.line(x4, y4, x2, y2),
+            generator.line(x4, y4, x2, y2, { stroke: element.strokeColor }),
         ]
         element.draw = (rc, context) => {
             context.translate(element.x, element.y)
@@ -322,9 +324,9 @@ type AppState = {
     exportBackground: boolean
     exportVisibleOnly: boolean
     exportPadding: number
-    viewBgColor: string
-    itemStrokeColor: string
-    itemBackgroundColor: string
+    currentItemStrokeColor: string
+    currentItemBackgroundColor: string
+    viewBackgroundColor: string
 }
 
 class App extends React.Component<{}, AppState> {
@@ -376,9 +378,9 @@ class App extends React.Component<{}, AppState> {
         exportBackground: false,
         exportVisibleOnly: true,
         exportPadding: 10,
-        viewBgColor: '#FFFFFF',
-        itemStrokeColor: '#000000',
-        itemBackgroundColor: '#ffffff',
+        currentItemStrokeColor: '#000000',
+        currentItemBackgroundColor: '#ffffff',
+        viewBackgroundColor: '#FFFFFF',
     }
 
     private renderOption({ type, children }: { type: string; children: React.ReactNode }) {
@@ -405,9 +407,9 @@ class App extends React.Component<{}, AppState> {
                     <label>
                         <input
                             type="color"
-                            value={this.state.itemStrokeColor}
+                            value={this.state.currentItemStrokeColor}
                             onChange={(e) => {
-                                this.setState({ itemStrokeColor: e.target.value })
+                                this.setState({ currentItemStrokeColor: e.target.value })
                             }}
                         />
                         цвет линия элемента
@@ -415,9 +417,9 @@ class App extends React.Component<{}, AppState> {
                     <label>
                         <input
                             type="color"
-                            value={this.state.itemBackgroundColor}
+                            value={this.state.currentItemBackgroundColor}
                             onChange={(e) => {
-                                this.setState({ itemBackgroundColor: e.target.value })
+                                this.setState({ currentItemBackgroundColor: e.target.value })
                             }}
                         />
                         цвет фон элемента
@@ -428,7 +430,7 @@ class App extends React.Component<{}, AppState> {
                                 exportBackground: this.state.exportBackground,
                                 exportVisibleOnly: this.state.exportVisibleOnly,
                                 exportPadding: this.state.exportPadding,
-                                viewBgColor: this.state.viewBgColor,
+                                viewBackgroundColor: this.state.viewBackgroundColor,
                             })
                         }}
                     >
@@ -447,9 +449,9 @@ class App extends React.Component<{}, AppState> {
                     <label>
                         <input
                             type="color"
-                            value={this.state.viewBgColor}
+                            value={this.state.viewBackgroundColor}
                             onChange={(e) => {
-                                this.setState({ viewBgColor: e.target.value })
+                                this.setState({ viewBackgroundColor: e.target.value })
                             }}
                         />
                         цвет фона
@@ -499,7 +501,7 @@ class App extends React.Component<{}, AppState> {
                             parsedElements.forEach((parsedElement: AmadrawElement) => {
                                 parsedElement.x += 10
                                 parsedElement.y += 10
-                                generateDraw(parsedElement, this.state.itemStrokeColor, this.state.itemBackgroundColor)
+                                generateDraw(parsedElement)
                                 elements.push(parsedElement)
                             })
                             this.forceUpdate()
@@ -525,7 +527,7 @@ class App extends React.Component<{}, AppState> {
                     onMouseDown={(e) => {
                         const x = e.clientX - (e.target as HTMLElement).offsetLeft
                         const y = e.clientY - (e.target as HTMLElement).offsetTop
-                        const element: AmadrawElement = newElement(this.state.elementType, x, y)
+                        const element: AmadrawElement = newElement(this.state.elementType, x, y, this.state.currentItemStrokeColor, this.state.currentItemBackgroundColor)
                         let isDraggingElements = false
                         const cursorStyle = document.documentElement.style.cursor
                         if (this.state.elementType === 'selection') {
@@ -580,7 +582,7 @@ class App extends React.Component<{}, AppState> {
                             element.height = height
                         }
 
-                        generateDraw(element, this.state.itemStrokeColor, this.state.itemBackgroundColor)
+                        generateDraw(element)
                         elements.push(element)
                         if (this.state.elementType === 'text') {
                             this.setState({
@@ -627,7 +629,7 @@ class App extends React.Component<{}, AppState> {
                             draggingElement.width = width
                             //shift
                             draggingElement.height = e.shiftKey ? width : height
-                            generateDraw(draggingElement, this.state.itemStrokeColor, this.state.itemBackgroundColor)
+                            generateDraw(draggingElement)
 
                             if (this.state.elementType === 'selection') {
                                 setSelection(draggingElement)
@@ -675,7 +677,7 @@ class App extends React.Component<{}, AppState> {
     }
 
     componentDidUpdate() {
-        renderScene(rc, context, this.state.viewBgColor)
+        renderScene(rc, context, this.state.viewBackgroundColor)
     }
 }
 

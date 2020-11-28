@@ -3,8 +3,12 @@
     src: url('./FG_Virgil.ttf');
 }
 
+body {
+    margin: 0;
+}
+
 .exportWrapper{
-    margin-bottom: 10px;
+    margin: 10px;
     display: flex;
     align-items: center;
 }
