@@ -13,6 +13,9 @@ type AmadrawTextElement = AmadrawElement & {
     actualBoundingBoxAscent: number
 }
 
+const LOCAL_STORAGE_KEY = 'amadraw'
+const LOCAL_STORAGE_KEY_STATE = 'amadraw-state'
+
 let elements = Array.of<AmadrawElement>()
 
 // Функция вычисления расстояния от точки на канвасе к элементу
@@ -121,6 +124,8 @@ const getArrowPoints = (element: AmadrawElement) => {
 }
 
 const renderScene = (rc: RoughCanvas, context: CanvasRenderingContext2D, viewBackgroundColor: string | null) => {
+    if(!context) return
+
     const fillStyle = context.fillStyle
 
     if(typeof viewBackgroundColor === 'string'){
@@ -321,6 +326,28 @@ const deleteSelectedElements = () => {
     }
 }
 
+const save = (state: AppState) => {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(elements))
+    localStorage.setItem(LOCAL_STORAGE_KEY_STATE, JSON.stringify(state))
+}
+
+const restore = () => {
+    try {
+        const savedElements = localStorage.getItem(LOCAL_STORAGE_KEY)
+        const savedState = localStorage.getItem(LOCAL_STORAGE_KEY_STATE)
+
+        if(savedElements){
+            elements = JSON.parse(savedElements)
+            elements.forEach((element: AmadrawElement) => generateDraw(element))
+        }
+
+        return savedState ? JSON.parse(savedState) : null
+    } catch (e) {
+        elements = []
+        return null
+    }
+}
+
 type AppState = {
     draggingElement: AmadrawElement | null
     elementType: string
@@ -352,6 +379,11 @@ const ELEMENT_TRANSLATE_AMOUNT = 1
 class App extends React.Component<{}, AppState> {
     componentDidMount() {
         document.addEventListener('keydown', this.onKeyDown, false)
+
+        const savedState = restore()
+        if(savedState){
+            this.setState(savedState)
+        }
     }
 
     componentWillUnmount() {
@@ -698,6 +730,7 @@ class App extends React.Component<{}, AppState> {
 
     componentDidUpdate() {
         renderScene(rc, context, this.state.viewBackgroundColor)
+        save(this.state)
     }
 }
 
