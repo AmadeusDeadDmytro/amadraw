@@ -118,12 +118,40 @@ const getArrowPoints = (element: AmadrawElement) => {
     return [x1, y1, x2, y2, x3, y3, x4, y4]
 }
 
+const renderScene = (rc: RoughCanvas, context: CanvasRenderingContext2D, viewBgColor: string | null) => {
+    const fillStyle = context.fillStyle
+
+    if(typeof viewBgColor === 'string'){
+        context.fillStyle = viewBgColor
+        context.fillRect(-0.5, -0.5, canvas.width, canvas.height)
+    } else {
+        context.clearRect(-0.5, -0.5, canvas.width, canvas.height)
+    }
+    context.fillStyle = fillStyle
+
+    elements.forEach((element) => {
+        element.draw(rc, context)
+        if (element.isSelected) {
+            const margin = 4
+
+            const elementX1 = getElementAbsoluteX1(element)
+            const elementX2 = getElementAbsoluteX2(element)
+            const elementY1 = getElementAbsoluteY1(element)
+            const elementY2 = getElementAbsoluteY2(element)
+            const lineDash = context.getLineDash()
+            context.setLineDash([8, 4])
+            context.strokeRect(elementX1 - margin, elementY1 - margin, elementX2 - elementX1 + margin * 2, elementY2 - elementY1 + margin * 2)
+            context.setLineDash(lineDash)
+        }
+    })
+}
+
 const exportAsPNG = ({
     exportBackground,
     exportVisibleOnly,
     exportPadding = 10,
     viewBgColor,
-}:{
+}: {
     exportBackground: boolean
     exportVisibleOnly: boolean
     exportPadding: number
@@ -133,7 +161,7 @@ const exportAsPNG = ({
 
     // снимаем выделение и делаем ререндер
     clearSelection()
-    
+
     ReactDOM.render(<App />, rootElement, () => {
         // Подсчитываем координаты видимой зоны
         let subCanvasX1 = Infinity
@@ -156,9 +184,8 @@ const exportAsPNG = ({
         tempCanvas.width = exportVisibleOnly ? subCanvasX2 - subCanvasX1 + exportPadding * 2 : canvas.width
         tempCanvas.height = exportVisibleOnly ? subCanvasY2 - subCanvasY1 + exportPadding * 2 : canvas.height
 
-        if (exportBackground) {
-            tempCanvasCtx.fillStyle = viewBgColor
-            tempCanvasCtx.fillRect(0, 0, canvas.width, canvas.height)
+        if (!exportBackground) {
+            renderScene(rc, context, null)
         }
 
         // Копируем оригинальный канвас на временный
@@ -175,7 +202,7 @@ const exportAsPNG = ({
         )
 
         const link = document.createElement('a')
-        link.setAttribute('download', 'amadraw.png')    
+        link.setAttribute('download', 'amadraw.png')
         link.setAttribute('href', tempCanvas.toDataURL('image/png'))
         link.click()
 
@@ -204,14 +231,14 @@ const generateDraw = (element: AmadrawElement, itemStrokeColor: string, itemBack
             context.fillStyle = fillStyle
         }
     } else if (element.type === 'rectangle') {
-        const shape = generator.rectangle(0, 0, element.width, element.height, {stroke: itemStrokeColor, fill: itemBackgroundColor})
+        const shape = generator.rectangle(0, 0, element.width, element.height, { stroke: itemStrokeColor, fill: itemBackgroundColor })
         element.draw = (rc, context) => {
             context.translate(element.x, element.y)
             rc.draw(shape)
             context.translate(-element.x, -element.y)
         }
     } else if (element.type === 'ellipse') {
-        const shape = generator.ellipse(element.width / 2, element.height / 2, element.width, element.height, {stroke: itemStrokeColor, fill: itemBackgroundColor})
+        const shape = generator.ellipse(element.width / 2, element.height / 2, element.width, element.height, { stroke: itemStrokeColor, fill: itemBackgroundColor })
         element.draw = (rc, context) => {
             context.translate(element.x, element.y)
             rc.draw(shape)
@@ -295,9 +322,9 @@ type AppState = {
     exportBackground: boolean
     exportVisibleOnly: boolean
     exportPadding: number
-    viewBgColor: string 
-    itemStrokeColor: string 
-    itemBackgroundColor: string 
+    viewBgColor: string
+    itemStrokeColor: string
+    itemBackgroundColor: string
 }
 
 class App extends React.Component<{}, AppState> {
@@ -351,7 +378,7 @@ class App extends React.Component<{}, AppState> {
         exportPadding: 10,
         viewBgColor: '#FFFFFF',
         itemStrokeColor: '#000000',
-        itemBackgroundColor: '#ffffff'
+        itemBackgroundColor: '#ffffff',
     }
 
     private renderOption({ type, children }: { type: string; children: React.ReactNode }) {
@@ -447,7 +474,6 @@ class App extends React.Component<{}, AppState> {
                         disabled={!this.state.exportVisibleOnly}
                     />
                     px)
-
                 </div>
                 <div
                     onCut={(e) => {
@@ -649,32 +675,8 @@ class App extends React.Component<{}, AppState> {
     }
 
     componentDidUpdate() {
-        const fillStyle = context.fillStyle;
-        context.fillStyle = this.state.viewBgColor;
-        context.fillRect(-0.5, -0.5, canvas.width, canvas.height);
-        context.fillStyle = fillStyle;
-    
-        elements.forEach(element => {
-          element.draw(rc, context);
-          if (element.isSelected) {
-            const margin = 4;
-    
-            const elementX1 = getElementAbsoluteX1(element);
-            const elementX2 = getElementAbsoluteX2(element);
-            const elementY1 = getElementAbsoluteY1(element);
-            const elementY2 = getElementAbsoluteY2(element);
-            const lineDash = context.getLineDash();
-            context.setLineDash([8, 4]);
-            context.strokeRect(
-              elementX1 - margin,
-              elementY1 - margin,
-              elementX2 - elementX1 + margin * 2,
-              elementY2 - elementY1 + margin * 2
-            );
-            context.setLineDash(lineDash);
-          }
-        });
-      }
+        renderScene(rc, context, this.state.viewBgColor)
+    }
 }
 
 const rootElement = document.getElementById('root')
