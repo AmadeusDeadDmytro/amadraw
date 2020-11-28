@@ -1,8 +1,9 @@
+import './index.css'
+
 import React from 'react'
 import ReactDOM from 'react-dom'
-import './index.css'
-import rough from 'roughjs/bin/rough'
 import { RoughCanvas } from 'roughjs/bin/canvas'
+import rough from 'roughjs/bin/rough'
 
 type AmadrawElement = ReturnType<typeof newElement>
 type AmadrawTextElement = AmadrawElement & {
@@ -132,55 +133,56 @@ const exportAsPNG = ({
 
     // снимаем выделение и делаем ререндер
     clearSelection()
-    drawScene()
+    
+    ReactDOM.render(<App />, rootElement, () => {
+        // Подсчитываем координаты видимой зоны
+        let subCanvasX1 = Infinity
+        let subCanvasX2 = 0
+        let subCanvasY1 = Infinity
+        let subCanvasY2 = 0
 
-    // Подсчитываем координаты видимой зоны
-    let subCanvasX1 = Infinity
-    let subCanvasX2 = 0
-    let subCanvasY1 = Infinity
-    let subCanvasY2 = 0
+        elements.forEach((element) => {
+            subCanvasX1 = Math.min(subCanvasX1, getElementAbsoluteX1(element))
+            subCanvasX2 = Math.max(subCanvasX2, getElementAbsoluteX2(element))
+            subCanvasY1 = Math.min(subCanvasY1, getElementAbsoluteY1(element))
+            subCanvasY2 = Math.max(subCanvasY2, getElementAbsoluteY2(element))
+        })
 
-    elements.forEach((element) => {
-        subCanvasX1 = Math.min(subCanvasX1, getElementAbsoluteX1(element))
-        subCanvasX2 = Math.max(subCanvasX2, getElementAbsoluteX2(element))
-        subCanvasY1 = Math.min(subCanvasY1, getElementAbsoluteY1(element))
-        subCanvasY2 = Math.max(subCanvasY2, getElementAbsoluteY2(element))
+        // Создаем временный канвас который и будем экспортировать
+        const tempCanvas = document.createElement('canvas') as HTMLCanvasElement
+        const tempCanvasCtx = tempCanvas.getContext('2d') as CanvasRenderingContext2D
+        tempCanvas.style.display = 'none'
+        document.body.appendChild(tempCanvas)
+        tempCanvas.width = exportVisibleOnly ? subCanvasX2 - subCanvasX1 + exportPadding * 2 : canvas.width
+        tempCanvas.height = exportVisibleOnly ? subCanvasY2 - subCanvasY1 + exportPadding * 2 : canvas.height
+
+        if (exportBackground) {
+            tempCanvasCtx.fillStyle = viewBgColor
+            tempCanvasCtx.fillRect(0, 0, canvas.width, canvas.height)
+        }
+
+        // Копируем оригинальный канвас на временный
+        tempCanvasCtx.drawImage(
+            canvas,
+            exportVisibleOnly ? subCanvasX1 - exportPadding : 0,
+            exportVisibleOnly ? subCanvasY1 - exportPadding : 0,
+            exportVisibleOnly ? subCanvasX2 - subCanvasX1 + exportPadding * 2 : canvas.width,
+            exportVisibleOnly ? subCanvasY2 - subCanvasY1 + exportPadding * 2 : canvas.height,
+            0,
+            0,
+            exportVisibleOnly ? tempCanvas.width : canvas.width,
+            exportVisibleOnly ? tempCanvas.height : canvas.height,
+        )
+
+        const link = document.createElement('a')
+        link.setAttribute('download', 'amadraw.png')    
+        link.setAttribute('href', tempCanvas.toDataURL('image/png'))
+        link.click()
+
+        // Очищаем DOM
+        link.remove()
+        if (tempCanvas !== canvas) tempCanvas.remove()
     })
-
-    // Создаем временный канвас который и будем экспортировать
-    const tempCanvas = document.createElement('canvas') as HTMLCanvasElement
-    const tempCanvasCtx = tempCanvas.getContext('2d') as CanvasRenderingContext2D
-    tempCanvas.style.display = 'none'
-    document.body.appendChild(tempCanvas)
-    tempCanvas.width = exportVisibleOnly ? subCanvasX2 - subCanvasX1 + exportPadding * 2 : canvas.width
-    tempCanvas.height = exportVisibleOnly ? subCanvasY2 - subCanvasY1 + exportPadding * 2 : canvas.height
-
-    if (exportBackground) {
-        tempCanvasCtx.fillStyle = viewBgColor
-        tempCanvasCtx.fillRect(0, 0, canvas.width, canvas.height)
-    }
-
-    // Копируем оригинальный канвас на временный
-    tempCanvasCtx.drawImage(
-        canvas,
-        exportVisibleOnly ? subCanvasX1 - exportPadding : 0,
-        exportVisibleOnly ? subCanvasY1 - exportPadding : 0,
-        exportVisibleOnly ? subCanvasX2 - subCanvasX1 + exportPadding * 2 : canvas.width,
-        exportVisibleOnly ? subCanvasY2 - subCanvasY1 + exportPadding * 2 : canvas.height,
-        0,
-        0,
-        exportVisibleOnly ? tempCanvas.width : canvas.width,
-        exportVisibleOnly ? tempCanvas.height : canvas.height,
-    )
-
-    const link = document.createElement('a')
-    link.setAttribute('download', 'amadraw.png')
-    link.setAttribute('href', tempCanvas.toDataURL('image/png'))
-    link.click()
-
-    // Очищаем DOM
-    link.remove()
-    if (tempCanvas !== canvas) tempCanvas.remove()
 }
 
 const rotate = (x1: number, y1: number, x2: number, y2: number, angle: number) => {
@@ -293,9 +295,9 @@ type AppState = {
     exportBackground: boolean
     exportVisibleOnly: boolean
     exportPadding: number
-    viewBgColor: string
-    itemStrokeColor: string
-    itemBackgroundColor: string
+    viewBgColor: string 
+    itemStrokeColor: string 
+    itemBackgroundColor: string 
 }
 
 class App extends React.Component<{}, AppState> {
@@ -314,11 +316,11 @@ class App extends React.Component<{}, AppState> {
 
         if (event.key === 'Escape') {
             clearSelection()
-            drawScene()
+            this.forceUpdate()
             event.preventDefault()
         } else if (event.key === 'Backspace') {
             deleteSelectedElements()
-            drawScene()
+            this.forceUpdate()
             event.preventDefault()
         } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'ArrowDown' || event.key === 'ArrowUp') {
             const step = event.shiftKey ? 5 : 1
@@ -330,13 +332,13 @@ class App extends React.Component<{}, AppState> {
                     else if (event.key === 'ArrowDown') element.y += step
                 }
             })
-            drawScene()
+            this.forceUpdate()
             event.preventDefault()
         } else if (event.key === 'a' && event.ctrlKey) {
             elements.forEach((element) => {
                 element.isSelected = true
             })
-            drawScene()
+            this.forceUpdate()
             event.preventDefault()
         }
     }
@@ -361,7 +363,7 @@ class App extends React.Component<{}, AppState> {
                     onChange={() => {
                         this.setState({ elementType: type })
                         clearSelection()
-                        drawScene()
+                        this.forceUpdate()
                     }}
                 />
                 {children}
@@ -371,7 +373,7 @@ class App extends React.Component<{}, AppState> {
 
     public render() {
         return (
-            <>
+            <div>
                 <div className="exportWrapper">
                     <label>
                         <input
@@ -451,7 +453,7 @@ class App extends React.Component<{}, AppState> {
                     onCut={(e) => {
                         e.clipboardData.setData('text/plain', JSON.stringify(elements.filter((element) => element.isSelected)))
                         deleteSelectedElements()
-                        drawScene()
+                        this.forceUpdate()
                         e.preventDefault()
                     }}
                     onCopy={(e) => {
@@ -474,7 +476,7 @@ class App extends React.Component<{}, AppState> {
                                 generateDraw(parsedElement, this.state.itemStrokeColor, this.state.itemBackgroundColor)
                                 elements.push(parsedElement)
                             })
-                            drawScene()
+                            this.forceUpdate()
                         }
 
                         e.preventDefault()
@@ -586,7 +588,7 @@ class App extends React.Component<{}, AppState> {
                                     })
                                     lastX = x
                                     lastY = y
-                                    drawScene()
+                                    this.forceUpdate()
                                     return
                                 }
                             }
@@ -604,7 +606,7 @@ class App extends React.Component<{}, AppState> {
                             if (this.state.elementType === 'selection') {
                                 setSelection(draggingElement)
                             }
-                            drawScene()
+                            this.forceUpdate()
                         }
 
                         const onMouseUp = () => {
@@ -617,7 +619,7 @@ class App extends React.Component<{}, AppState> {
 
                             if (draggingElement === null) {
                                 clearSelection()
-                                drawScene()
+                                this.forceUpdate()
                                 return
                             }
                             if (elementType === 'selection') {
@@ -633,18 +635,46 @@ class App extends React.Component<{}, AppState> {
                                 draggingElement: null,
                                 elementType: 'selection',
                             })
-                            drawScene()
+                            this.forceUpdate()
                         }
 
                         window.addEventListener('mousemove', onMouseMove)
                         window.addEventListener('mouseup', onMouseUp)
 
-                        drawScene()
+                        this.forceUpdate()
                     }}
                 />
-            </>
+            </div>
         )
     }
+
+    componentDidUpdate() {
+        const fillStyle = context.fillStyle;
+        context.fillStyle = this.state.viewBgColor;
+        context.fillRect(-0.5, -0.5, canvas.width, canvas.height);
+        context.fillStyle = fillStyle;
+    
+        elements.forEach(element => {
+          element.draw(rc, context);
+          if (element.isSelected) {
+            const margin = 4;
+    
+            const elementX1 = getElementAbsoluteX1(element);
+            const elementX2 = getElementAbsoluteX2(element);
+            const elementY1 = getElementAbsoluteY1(element);
+            const elementY2 = getElementAbsoluteY2(element);
+            const lineDash = context.getLineDash();
+            context.setLineDash([8, 4]);
+            context.strokeRect(
+              elementX1 - margin,
+              elementY1 - margin,
+              elementX2 - elementX1 + margin * 2,
+              elementY2 - elementY1 + margin * 2
+            );
+            context.setLineDash(lineDash);
+          }
+        });
+      }
 }
 
 const rootElement = document.getElementById('root')
@@ -654,26 +684,4 @@ const rc = rough.canvas(canvas)
 const context = canvas.getContext('2d') as CanvasRenderingContext2D
 context.translate(0.5, 0.5)
 
-const drawScene = () => {
-    ReactDOM.render(<App />, rootElement)
-    context.clearRect(-0.5, -0.5, canvas.width, canvas.height)
-
-    elements.forEach((element) => {
-        const elementX1 = getElementAbsoluteX1(element)
-        const elementX2 = getElementAbsoluteX2(element)
-        const elementY1 = getElementAbsoluteY1(element)
-        const elementY2 = getElementAbsoluteY2(element)
-
-        element.draw(rc, context)
-
-        if (element.isSelected) {
-            const margin = 4
-            const lineDash = context.getLineDash()
-            context.setLineDash([8, 4])
-            context.strokeRect(elementX1 - margin, elementY1 - margin, elementX2 - elementX1 + margin * 2, elementY2 - elementY1 + margin * 2)
-            context.setLineDash(lineDash)
-        }
-    })
-}
-
-drawScene()
+ReactDOM.render(<App />, rootElement)
