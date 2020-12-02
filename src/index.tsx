@@ -27,7 +27,7 @@ const withCustomMathRandom = <T, >(seed: number, cb: () => T ) => {
     const random = Math.random;
     Math.random = LCG(seed);
     const result = cb();
-    Math.random = random;   
+    Math.random = random;
     return result;
 }
 
@@ -113,9 +113,15 @@ const newElement = (type: string, x: number, y: number, strokeColor: string, bac
         backgroundColor: backgroundColor,
         seed: Math.floor(Math.random() * 2 ** 31),
         isSelected: false,
-        draw(rc: RoughCanvas, context: CanvasRenderingContext2D) {},
+        draw(rc: RoughCanvas, context: CanvasRenderingContext2D, sceneState: SceneState) {},
     }
     return element
+}
+
+type SceneState = {
+    scrollX: number
+    scrollY: number
+    viewBackgroundColor: string | null
 }
 
 const getArrowPoints = (element: AmadrawElement) => {
@@ -137,13 +143,15 @@ const getArrowPoints = (element: AmadrawElement) => {
     return [x1, y1, x2, y2, x3, y3, x4, y4]
 }
 
-const renderScene = (rc: RoughCanvas, context: CanvasRenderingContext2D, viewBackgroundColor: string | null) => {
+const renderScene = (rc: RoughCanvas, context: CanvasRenderingContext2D, sceneState: SceneState) => {
+    if (!context) return
+
     if(!context) return
 
     const fillStyle = context.fillStyle
 
-    if(typeof viewBackgroundColor === 'string'){
-        context.fillStyle = viewBackgroundColor
+    if (typeof sceneState.viewBackgroundColor === 'string') {
+        context.fillStyle = sceneState.viewBackgroundColor
         context.fillRect(-0.5, -0.5, canvas.width, canvas.height)
     } else {
         context.clearRect(-0.5, -0.5, canvas.width, canvas.height)
@@ -151,7 +159,7 @@ const renderScene = (rc: RoughCanvas, context: CanvasRenderingContext2D, viewBac
     context.fillStyle = fillStyle
 
     elements.forEach((element) => {
-        element.draw(rc, context)
+        element.draw(rc, context, sceneState)
         if (element.isSelected) {
             const margin = 4
 
@@ -161,7 +169,12 @@ const renderScene = (rc: RoughCanvas, context: CanvasRenderingContext2D, viewBac
             const elementY2 = getElementAbsoluteY2(element)
             const lineDash = context.getLineDash()
             context.setLineDash([8, 4])
-            context.strokeRect(elementX1 - margin, elementY1 - margin, elementX2 - elementX1 + margin * 2, elementY2 - elementY1 + margin * 2)
+            context.strokeRect(
+                elementX1 - margin + sceneState.scrollX,
+                elementY1 - margin + sceneState.scrollY,
+                elementX2 - elementX1 + margin * 2,
+                elementY2 - elementY1 + margin * 2
+            );
             context.setLineDash(lineDash)
         }
     })
@@ -178,13 +191,12 @@ const exportAsPNG = ({
     exportPadding: number
     viewBackgroundColor: string
 }) => {
-    if (!elements.length) return alert('Нельзя сохранять пустое полотно')
+    if (!elements.length) return window.alert('Cannot export empty canvas.')
 
-    // снимаем выделение и делаем ререндер
+    // deselect & rerender
+
     clearSelection()
-
     ReactDOM.render(<App />, rootElement, () => {
-        // Подсчитываем координаты видимой зоны
         let subCanvasX1 = Infinity
         let subCanvasX2 = 0
         let subCanvasY1 = Infinity
@@ -197,21 +209,26 @@ const exportAsPNG = ({
             subCanvasY2 = Math.max(subCanvasY2, getElementAbsoluteY2(element))
         })
 
-        // Создаем временный канвас который и будем экспортировать
-        const tempCanvas = document.createElement('canvas') as HTMLCanvasElement
-        const tempCanvasCtx = tempCanvas.getContext('2d') as CanvasRenderingContext2D
+        // Временный канвас
+
+        const tempCanvas = document.createElement('canvas')
+        const tempCanvasCtx = tempCanvas.getContext('2d')!
         tempCanvas.style.display = 'none'
         document.body.appendChild(tempCanvas)
         tempCanvas.width = exportVisibleOnly ? subCanvasX2 - subCanvasX1 + exportPadding * 2 : canvas.width
         tempCanvas.height = exportVisibleOnly ? subCanvasY2 - subCanvasY1 + exportPadding * 2 : canvas.height
 
+        // Если экспорт без фона то ререндер без фона
         if (!exportBackground) {
-            renderScene(rc, context, null)
+            renderScene(rc, context, {
+                viewBackgroundColor: null,
+                scrollX: 0,
+                scrollY: 0,
+            })
         }
 
-        // Копируем оригинальный канвас на временный
         tempCanvasCtx.drawImage(
-            canvas,
+            canvas, // source
             exportVisibleOnly ? subCanvasX1 - exportPadding : 0,
             exportVisibleOnly ? subCanvasY1 - exportPadding : 0,
             exportVisibleOnly ? subCanvasX2 - subCanvasX1 + exportPadding * 2 : canvas.width,
@@ -222,12 +239,15 @@ const exportAsPNG = ({
             exportVisibleOnly ? tempCanvas.height : canvas.height,
         )
 
+        if (!exportBackground) {
+            renderScene(rc, context, { viewBackgroundColor, scrollX: 0, scrollY: 0 })
+        }
+
         const link = document.createElement('a')
-        link.setAttribute('download', 'amadraw.png')
+        link.setAttribute('download', 'excalidraw.png')
         link.setAttribute('href', tempCanvas.toDataURL('image/png'))
         link.click()
 
-        // Очищаем DOM
         link.remove()
         if (tempCanvas !== canvas) tempCanvas.remove()
     })
@@ -245,29 +265,29 @@ let generator = rough.generator(null as any)
 
 const generateDraw = (element: AmadrawElement) => {
     if (element.type === 'selection') {
-        element.draw = (rc, context) => {
+        element.draw = (rc, context, { scrollX, scrollY }) => {
             const fillStyle = context.fillStyle
             context.fillStyle = 'rgba(0, 0, 255, 0.10)'
-            context.fillRect(element.x, element.y, element.width, element.height)
+            context.fillRect(element.x + scrollX, element.y + scrollY, element.width, element.height)
             context.fillStyle = fillStyle
         }
     } else if (element.type === 'rectangle') {
         const shape = withCustomMathRandom(element.seed, () => {
             return generator.rectangle(0, 0, element.width, element.height, { stroke: element.strokeColor, fill: element.backgroundColor })
         })
-        element.draw = (rc, context) => {
-            context.translate(element.x, element.y)
+        element.draw = (rc, context, { scrollX, scrollY }) => {
+            context.translate(element.x + scrollX, element.y + scrollY)
             rc.draw(shape)
-            context.translate(-element.x, -element.y)
+            context.translate(-element.x - scrollX, -element.y - scrollY)
         }
     } else if (element.type === 'ellipse') {
         const shape = withCustomMathRandom(element.seed, () => {
             return generator.ellipse(element.width / 2, element.height / 2, element.width, element.height, { stroke: element.strokeColor, fill: element.backgroundColor })
         })
-        element.draw = (rc, context) => {
-            context.translate(element.x, element.y)
+        element.draw = (rc, context, { scrollX, scrollY }) => {
+            context.translate(element.x + scrollX, element.y + scrollY)
             rc.draw(shape)
-            context.translate(-element.x, -element.y)
+            context.translate(-element.x - scrollX, -element.y - scrollY)
         }
     } else if (element.type === 'arrow') {
         const [x1, y1, x2, y2, x3, y3, x4, y4] = getArrowPoints(element)
@@ -282,19 +302,19 @@ const generateDraw = (element: AmadrawElement) => {
                 generator.line(x4, y4, x2, y2, { stroke: element.strokeColor }),
             ]
         })
-        element.draw = (rc, context) => {
-            context.translate(element.x, element.y)
+        element.draw = (rc, context, { scrollX, scrollY }) => {
+            context.translate(element.x + scrollX, element.y + scrollY)
             shapes.forEach((shape) => rc.draw(shape))
-            context.translate(-element.x, -element.y)
+            context.translate(-element.x - scrollX, -element.y - scrollY)
         }
         return
     } else if (isTextElement(element)) {
-        element.draw = (rc, context) => {
+        element.draw = (rc, context, { scrollX, scrollY }) => {
             const font = context.font
             context.font = element.font
             const fillStyle = context.fillStyle
             context.fillStyle = element.strokeColor
-            context.fillText(element.text, element.x, element.y + element.actualBoundingBoxAscent)
+            context.fillText(element.text, element.x + scrollX, element.y + element.actualBoundingBoxAscent + scrollY)
             context.fillStyle = fillStyle
             context.font = font
         }
@@ -331,13 +351,11 @@ const setSelection = (selection: AmadrawElement) => {
         element.isSelected = element.type !== 'selection' && selectionX1 <= elementX1 && selectionY1 <= elementY1 && selectionX2 >= elementX2 && selectionY2 >= elementY2
     })
 }
-
 const clearSelection = () => {
     elements.forEach((element) => {
         element.isSelected = false
     })
 }
-
 const deleteSelectedElements = () => {
     for (let i = elements.length - 1; i >= 0; --i) {
         if (elements[i].isSelected) {
@@ -377,6 +395,8 @@ type AppState = {
     currentItemStrokeColor: string
     currentItemBackgroundColor: string
     viewBackgroundColor: string
+    scrollX: number
+    scrollY: number
 }
 
 const KEYS = {
@@ -386,27 +406,28 @@ const KEYS = {
     ARROW_DOWN: 'ArrowDown',
     ESCAPE: 'Escape',
     DELETE: 'Delete',
-    BACKSPACE: 'Backspace'
+    BACKSPACE: 'Backspace',
 }
 
 const isArrowKey = (keyCode: string) => {
-    return (keyCode === KEYS.ARROW_LEFT || keyCode === KEYS.ARROW_RIGHT || keyCode === KEYS.ARROW_DOWN ||keyCode === KEYS.ARROW_UP)
+    return keyCode === KEYS.ARROW_LEFT || keyCode === KEYS.ARROW_RIGHT || keyCode === KEYS.ARROW_DOWN || keyCode === KEYS.ARROW_UP
 }
 
 const ELEMENT_SHIFT_TRANSLATE_AMOUNT = 5
 const ELEMENT_TRANSLATE_AMOUNT = 1
 
 class App extends React.Component<{}, AppState> {
-    componentDidMount() {
+    public componentDidMount() {
         document.addEventListener('keydown', this.onKeyDown, false)
 
-        const savedState = restore()
+        // const savedState = restore()
+        const savedState = 0
         if(savedState){
             this.setState(savedState)
         }
     }
 
-    componentWillUnmount() {
+    public componentWillUnmount() {
         document.removeEventListener('keydown', this.onKeyDown, false)
     }
 
@@ -453,6 +474,8 @@ class App extends React.Component<{}, AppState> {
         currentItemStrokeColor: '#000000',
         currentItemBackgroundColor: '#ffffff',
         viewBackgroundColor: '#FFFFFF',
+        scrollX: 0,
+        scrollY: 0,
     }
 
     private renderOption({ type, children }: { type: string; children: React.ReactNode }) {
@@ -595,6 +618,14 @@ class App extends React.Component<{}, AppState> {
                     height={window.innerHeight}
                     onClick={() => {
                         console.log('click')
+                    }}
+                    onWheel={e => {
+                        e.preventDefault()
+                        const { deltaX, deltaY } = e
+                        this.setState(state => ({
+                            scrollX: state.scrollX - deltaX,
+                            scrollY: state.scrollY - deltaY,
+                        }))
                     }}
                     onMouseDown={(e) => {
                         const x = e.clientX - (e.target as HTMLElement).offsetLeft
@@ -748,9 +779,15 @@ class App extends React.Component<{}, AppState> {
         )
     }
 
-    componentDidUpdate() {
-        renderScene(rc, context, this.state.viewBackgroundColor)
-        save(this.state)
+    public componentDidUpdate() {
+        renderScene(rc, context, {
+            scrollX: this.state.scrollX,
+            scrollY: this.state.scrollY,
+            viewBackgroundColor: this.state.viewBackgroundColor,
+        })
+        if(rc){
+            save(this.state)
+        }
     }
 }
 
